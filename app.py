@@ -12,7 +12,7 @@ st.subheader("醫工級精準記帳與備料")
 url = "https://docs.google.com/spreadsheets/d/1QWAnwlDuyqRpWesfEFGm0Du6G6CrFcSCuFt6sNw-1dw/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-with st.form("order_form"):
+with st.form("order1_form"):
     customer = st.text_input("客戶姓名")
     tables = st.number_input("預訂桌數", min_value=1)
     submitted = st.form_submit_button("送出訂單並同步至 Excel")
