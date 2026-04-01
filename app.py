@@ -3,56 +3,70 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd 
 from datetime import datetime
 
-# 1. App 標題與介面設定
+# 1. App 設定
+st.set_page_config(page_title="辦桌訂單系統", page_icon="🏮")
 st.title("🏮 辦桌訂單管理系統")
-st.subheader("醫工級精準記帳與備料")
+st.subheader("醫工級精準記帳與備料同步")
 
-# 1. 建立 Google Sheets 連線
-# 請將下方的 URL 換成你自己的 Google Sheet 網址
-url = "https://docs.google.com/spreadsheets/d/1QWAnwlDuyqRpWesfEFGm0Du6G6CrFcSCuFt6sNw-1dw/edit?gid=0#gid=0"
+# 2. 建立 Google Sheets 連線
+url = "https://docs.google.com/spreadsheets/d/1QWAnwlDuyqRpWesfEFGm0Du6G6CrFcSCuFt6sNw-1dw/edit#gid=0"
+
+# 建立連線，設定 ttl=0 代表不使用緩存，確保每次都讀到最新資料
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-with st.form("order1_form"):
-    customer = st.text_input("客戶姓名")
-    tables = st.number_input("預訂桌數", min_value=1)
-    submitted = st.form_submit_button("送出訂單並同步至 Excel")
-
-if submitted:
-    # 2. 準備要寫入的資料
-    new_order = pd.DataFrame([{
-        "客戶姓名": customer,
-        "預訂桌數": tables,
-        "豬肉需求": tables * 1.5,
-        "訂單時間": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }])
-
-    # 3. 抓取舊資料並合併
-    existing_data = conn.read(spreadsheet=url)
-    updated_data = pd.concat([existing_data, new_order], ignore_index=True)
-
-    # 4. 寫回 Google Sheets
-    conn.update(spreadsheet=url, data=updated_data)
-    st.success("✅ 資料已成功同步到 Google Sheet！爸爸可以去查看了。")
-# 2. 輸入區域：讓家人在手機上填寫
-with st.form("order_form"):
+# 3. 整合式輸入表單
+with st.form("main_order_form"):
+    st.write("### 📝 新增訂單資料")
     customer = st.text_input("客戶姓名")
     tables = st.number_input("預訂桌數", min_value=1, value=10)
     price = st.number_input("每桌單價 (元)", min_value=0, value=12000)
-    submitted = st.form_submit_button("產生訂單報告")
+    
+    # 提交按鈕
+    submitted = st.form_submit_button("送出訂單並計算備料")
 
-# 3. 邏輯運算：自動化備料與財務計算
+# 4. 按下按鈕後的邏輯處理
 if submitted:
+    # A. 計算邏輯
     total_amount = tables * price
-    pork_needed = tables * 1.5  # 假設每桌 1.5 斤
-    shrimp_needed = tables * 12 # 假設每桌 12 隻
+    pork_needed = tables * 1.5  
+    shrimp_needed = tables * 12 
     
-    # 4. 顯示結果
+    # B. 顯示即時結果
     st.success(f"✅ 訂單已產出：{customer}")
-    
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("總金額", f"${total_amount:,}")
     with col2:
         st.metric("豬肉需求", f"{pork_needed} 斤")
-    
-    st.info(f"🦐 蝦子採購量：{shrimp_needed} 隻")
+    with col3:
+        st.metric("蝦子需求", f"{shrimp_needed} 隻")
+
+    # C. 同步至 Google Sheets
+    try:
+        # 準備新資料
+        new_order = pd.DataFrame([{
+            "客戶姓名": customer,
+            "預訂桌數": tables,
+            "每桌單價": price,
+            "總金額": total_amount,
+            "豬肉需求": pork_needed,
+            "訂單時間": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }])
+
+        # 讀取現有資料 (如果表單是空的，會回傳空 DataFrame)
+        existing_data = conn.read(spreadsheet=url)
+        
+        # 合併資料
+        updated_data = pd.concat([existing_data, new_order], ignore_index=True)
+
+        # 更新回雲端
+        conn.update(spreadsheet=url, data=updated_data)
+        st.balloons() # 成功後的慶祝動畫
+        st.info("💡 資料已同步至 Google Sheet，家人可即時查看。")
+    except Exception as e:
+        st.error(f"同步失敗，請檢查 Google Sheet 權限設定。錯誤訊息: {e}")
+
+# 5. (選用) 顯示目前已存檔的訂單
+if st.checkbox("查看雲端現有訂單"):
+    data = conn.read(spreadsheet=url)
+    st.dataframe(data)
